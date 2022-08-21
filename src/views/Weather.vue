@@ -1,0 +1,95 @@
+<template>
+    <div class="main">
+        <div v-if="loading" class="loading" :class="{'theme-bright': lightMode}">
+            <span class="loader"></span>
+        </div>
+        <div v-else class="weather" :class="{day: isDay, night: isNight}">
+            <div class="weather-wrap">
+                <CurrentWeather :isDay="isDay" :isNight="isNight" :currentWeather="currentWeather" />
+                <HourlyWeather :forecast="forecast" />
+                <WeeklyForecast :forecast="forecast" />
+                <AdditionalInfo :currentWeather="currentWeather" />
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+import axios from "axios";
+import db from "../firebase/firebaseinit.js";
+import CurrentWeather from "../components/CurrentWeather";
+import HourlyWeather from "../components/HourlyWeather";
+import WeeklyForecast from "../components/WeeklyForecast";
+import AdditionalInfo from "../components/AdditionalInfo";
+export default {
+    name: "Weather",
+    props: ["APIkey", "isDay", "isNight", "lightMode"],
+    components: {
+        CurrentWeather,
+        HourlyWeather,
+        WeeklyForecast,
+        AdditionalInfo,
+    },
+    data() {
+        return {
+            forecast: null,
+            currentWeather: null,
+            loading: true,
+            currentTime: null,
+        };
+    },
+    created() {
+        this.getWeather();
+    },
+    beforeDestroy() {
+        this.$emit("resetDays");
+    },
+    methods: {
+        getWeather() {
+            db.collection('cities').where('city', '==', `${this.$route.params.city}`).get()
+            .then((docs) => {
+                docs.forEach(doc => {
+                    this.currentWeather = doc.data().currentWeather;
+                    axios.get(
+                        `https://api.openweathermap.org/data/2.5/onecall?lat=${doc.data().currentWeather.coord.lat}&lon=${doc.data().currentWeather.coord.lon}&exclude=current,minutley,alerts&units=metric&appid=${this.APIkey}`
+                    ).then(res => {
+                        this.forecast = res.data
+                    }).then(() => {
+                        this.loading = false;
+                        this.getCurrentTime();
+                    });
+                });
+            });
+        },
+        getCurrentTime() {
+            const dateObject = new Date();
+            this.currentTime = dateObject.getHours();
+            const sunrise = new Date(this.currentWeather.sys.sunrise * 1000).getHours();
+            const sunset = new Date(this.currentWeather.sys.sunset * 1000).getHours();
+            if(this.currentTime > sunrise && this.currentTime < sunset) {
+                this.$emit('is-day');
+            }
+            else {
+                this.$emit('is-night');
+            }
+        },
+    },
+};
+</script>
+
+<style lang="scss" scoped>
+
+.weather {
+    transition: 500ms ease;
+    overflow: scroll;
+    overflow-x: hidden;
+    height: 100%;
+    width: 100%;
+    
+    .weather-wrap {
+        overflow: hidden;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+}
+</style>
